@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>朗读教室 · Read‑Aloud</title>
+<style>
+  :root{
+    --bg:#0b0c0f;           /* deep ink */
+    --paper:#0e1116;        /* card bg */
+    --muted:#9aa4b2;        /* secondary text */
+    --ink:#e6ebf2;          /* primary text */
+    --accent:#6ea8fe;       /* accent */
+    --accent-2:#9bffe7;     /* secondary accent */
+    --border:#1b2230;       /* subtle borders */
+    --ok:#34d399;           /* green */
+    --warn:#f59e0b;         /* amber */
+    --danger:#ef4444;       /* red */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji", "Noto Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height:1.5;
+  }
+  /* Layout */
+  .wrap{display:grid; grid-template-rows:auto auto 1fr auto; min-height:100svh; gap:14px;}
+  header{
+    position:sticky; top:0; z-index:10; backdrop-filter:saturate(1.2) blur(10px);
+    background:linear-gradient(180deg, rgba(14,17,22,.9), rgba(14,17,22,.6) 70%, rgba(14,17,22,0));
+    border-bottom:1px solid var(--border);
+  }
+  .container{max-width:1100px; margin:0 auto; padding:16px 20px;}
+  .brand{display:flex; align-items:center; gap:12px}
+  .logo{width:34px;height:34px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); box-shadow:0 8px 30px rgba(110,168,254,.25)}
+  h1{font-size:20px; margin:0}
+  .sub{color:var(--muted); font-size:13px}
+
+  .tabs{display:flex; gap:8px; padding:0 20px 8px; border-bottom:1px solid var(--border)}
+  .tab{appearance:none; border:1px solid var(--border); background:var(--paper); color:var(--ink);
+    padding:8px 12px; border-radius:12px; cursor:pointer; font-size:14px}
+  .tab[aria-selected="true"]{border-color:transparent; background:linear-gradient(180deg,#111723,#0f141e); box-shadow:inset 0 0 0 1px #1f2837, 0 6px 14px rgba(0,0,0,.35)}
+
+  main{padding:10px 20px 24px}
+  .grid{display:grid; gap:14px}
+  @media (min-width: 920px){
+    .grid{grid-template-columns: 320px 1fr}
+  }
+
+  .card{background:var(--paper); border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow: 0 8px 28px rgba(0,0,0,.35)}
+  .card h2{font-size:14px; letter-spacing:.02em; text-transform:uppercase; color:var(--muted); margin:0 0 8px}
+
+  /* Controls */
+  .control{display:flex; flex-direction:column; gap:6px; margin:8px 0}
+  .control label{font-size:12px; color:var(--muted)}
+  .control select, .control input[type="range"], .control input[type="number"], .control button{
+    width:100%; background:#0b111a; color:var(--ink); border:1px solid #1b2230; padding:10px 12px; border-radius:12px; font-size:14px;
+  }
+  .row{display:grid; grid-template-columns: 1fr 1fr; gap:8px}
+
+  .btns{display:flex; gap:8px; flex-wrap:wrap}
+  .btn{
+    background:#0b111a; color:var(--ink); border:1px solid #2a3446; padding:10px 14px; border-radius:12px; font-weight:600; font-size:14px; cursor:pointer;
+  }
+  .btn.primary{background:linear-gradient(180deg,#1a7dff,#1560d1); border:none}
+  .btn.stop{background:linear-gradient(180deg,#ef4444,#b91c1c); border:none}
+  .btn.pause{background:linear-gradient(180deg,#f59e0b,#b45309); border:none}
+  .btn:disabled{opacity:.55; cursor:not-allowed}
+
+  /* Editor */
+  textarea.text{width:100%; min-height:280px; background:#0b111a; color:var(--ink); border:1px dashed #2a3446; padding:14px; border-radius:14px; font-size:15px; line-height:1.6; resize:vertical}
+  .hint{font-size:12px; color:var(--muted)}
+
+  /* Reader */
+  .sentences{display:flex; flex-direction:column; gap:6px; max-height:60vh; overflow:auto; padding-right:6px}
+  .sentence{padding:10px 12px; border:1px solid #1b2230; border-radius:12px; background:#0b111a; transition:all .2s ease; cursor:pointer}
+  .sentence:hover{border-color:#2b3750}
+  .sentence.active{background:linear-gradient(180deg,#0f1726,#0e1539); border-color:#31406b; box-shadow:0 0 0 1px #2e3f72 inset}
+  .sentence.done{opacity:.65}
+  .tools{display:flex; gap:8px; align-items:center; justify-content:space-between}
+  .tools .left{display:flex; gap:8px; align-items:center}
+  .pill{border:1px solid #253047; border-radius:999px; padding:3px 8px; font-size:12px; color:var(--muted)}
+  .counter{font-variant-tabular-nums:tabular-nums}
+
+  .countdown{display:inline-grid; place-items:center; width:42px; height:42px; border-radius:50%; border:2px solid #2a3a61; font-weight:700}
+  .countdown.live{border-color:var(--accent)}
+
+  /* Source code viewer */
+  details{border:1px solid var(--border); border-radius:14px; padding:10px 12px; background:#0b111a}
+  details>summary{cursor:pointer; color:var(--muted)}
+  #sourceBox{width:100%; min-height:220px; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; font-size:12px; background:#05080e; color:#cfe3ff; border:1px solid #1b2230; border-radius:12px; padding:12px;}
+
+  footer{border-top:1px solid var(--border); color:var(--muted); font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="container brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>朗读教室 · Read‑Aloud</h1>
+        <div class="sub">Notion 风 · 极简高质课堂朗读器（逐句播放 · 跟读停顿 · 语速/音色/字号可调）</div>
+      </div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="页面切换">
+      <button class="tab" role="tab" id="tab-edit" aria-controls="panel-edit" aria-selected="true">① 输入文本</button>
+      <button class="tab" role="tab" id="tab-read" aria-controls="panel-read" aria-selected="false">② 跟读&播放</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid">
+      <!-- Left: Controls -->
+      <section class="card" aria-labelledby="controlsTitle">
+        <h2 id="controlsTitle">控制面板</h2>
+
+        <div class="control">
+          <label for="voiceSelect">音色（Voice）</label>
+          <select id="voiceSelect" title="选择合成语音"></select>
+          <div class="hint">提示：不同系统/浏览器提供的音色不同；若列表为空，请等待 1–2 秒或再次点击“刷新音色”。</div>
+          <div class="btns" style="margin-top:6px">
+            <button class="btn" id="refreshVoices">刷新音色</button>
+            <button class="btn" id="testVoice">试音</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="control">
+            <label for="rate">语速</label>
+            <select id="rate">
+              <option>0.5</option>
+              <option>0.75</option>
+              <option selected>1</option>
+              <option>1.25</option>
+              <option>1.5</option>
+              <option>1.75</option>
+              <option>2</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="pauseSec">停顿时长（秒）</label>
+            <input id="pauseSec" type="number" min="0.5" max="10" step="0.5" value="2" />
+          </div>
+        </div>
+
+        <div class="control">
+          <label for="fontSize">字号（24–48）</label>
+          <input id="fontSize" type="range" min="24" max="48" step="2" value="28" />
+        </div>
+
+        <div class="btns" style="margin-top:8px">
+          <button class="btn primary" id="btnStart">开始</button>
+          <button class="btn pause" id="btnPause">暂停</button>
+          <button class="btn" id="btnResume">继续</button>
+          <button class="btn stop" id="btnStop">停止</button>
+          <button class="btn" id="btnPrev">上一句</button>
+          <button class="btn" id="btnNext">下一句</button>
+        </div>
+
+        <div class="control" style="margin-top:10px">
+          <label for="autoScroll">辅助</label>
+          <div class="row">
+            <label class="pill"><input type="checkbox" id="autoScroll" checked style="margin-right:8px">自动滚动到当前句</label>
+            <label class="pill"><input type="checkbox" id="beep" checked style="margin-right:8px">跟读倒计时提示音</label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Panels -->
+      <section>
+        <!-- EDIT PANEL -->
+        <div id="panel-edit" class="card" role="tabpanel" aria-labelledby="tab-edit">
+          <h2>输入文本</h2>
+          <textarea id="inputText" class="text" placeholder="在此粘贴/输入要朗读的课文。将自动按中英文标点与换行拆分为句子。"></textarea>
+          <div class="tools" style="margin-top:10px">
+            <div class="left">
+              <span class="pill">共 <span id="lineCount" class="counter">0</span> 句</span>
+              <span class="pill">字符 <span id="charCount" class="counter">0</span></span>
+            </div>
+            <div class="btns">
+              <button class="btn" id="btnSample">填入示例</button>
+              <button class="btn" id="btnClear">清空</button>
+              <button class="btn" id="btnGoRead">切到跟读页 ▶</button>
+            </div>
+          </div>
+          <p class="hint">保存策略：内容与设置将自动保存在浏览器 LocalStorage 中，方便下次继续使用。</p>
+        </div>
+
+        <!-- READ PANEL -->
+        <div id="panel-read" class="card" role="tabpanel" aria-labelledby="tab-read" hidden>
+          <h2>跟读 & 播放</h2>
+          <div class="tools" style="margin-bottom:10px">
+            <div class="left">
+              <span class="pill">进度 <span id="progress" class="counter">0 / 0</span></span>
+              <span class="pill">当前 <span id="currentIdx" class="counter">—</span></span>
+            </div>
+            <div class="left">
+              <div id="countdown" class="countdown" title="跟读倒计时">—</div>
+            </div>
+          </div>
+          <div id="sentences" class="sentences" aria-live="polite" aria-label="句子列表"></div>
+          <p class="hint" style="margin-top:10px">提示：点击任意一句可从该处开始播放；当前句高亮显示，完成的句子透明度降低。</p>
+        </div>
+
+        <!-- SOURCE VIEWER -->
+        <div class="card" style="margin-top:14px">
+          <h2>代码一键收集（写入文本框）</h2>
+          <div class="btns" style="margin-bottom:8px">
+            <button class="btn" id="btnDump">生成本页完整代码 → 文本框</button>
+            <button class="btn" id="btnCopyCode">复制代码</button>
+          </div>
+          <details>
+            <summary>展开 / 收起 代码文本框</summary>
+            <textarea id="sourceBox" readonly placeholder="点击上方“生成本页完整代码”将本页面的 HTML 写入此文本框，便于一键复制保存。"></textarea>
+          </details>
+          <p class="hint">说明：本功能会将当前页面的完整 HTML 源码写入上方文本框，满足“代码写在一个文本框内”的需求。</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="container" style="padding:12px 20px 24px">
+    © 2025 朗读教室 · 面向英语课堂的逐句跟读工具 | 键盘：<span class="pill">Space 暂停/继续</span> <span class="pill">J/K 上/下一句</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const qs = s => document.querySelector(s);
+  const qsa = s => Array.from(document.querySelectorAll(s));
+
+  // Elements
+  const tabEdit = qs('#tab-edit');
+  const tabRead = qs('#tab-read');
+  const panelEdit = qs('#panel-edit');
+  const panelRead = qs('#panel-read');
+
+  const inputText = qs('#inputText');
+  const lineCount = qs('#lineCount');
+  const charCount = qs('#charCount');
+  const sentencesEl = qs('#sentences');
+  const progressEl = qs('#progress');
+  const currentIdxEl = qs('#currentIdx');
+  const countdownEl = qs('#countdown');
+
+  const voiceSelect = qs('#voiceSelect');
+  const refreshBtn = qs('#refreshVoices');
+  const testVoiceBtn = qs('#testVoice');
+  const rateSel = qs('#rate');
+  const pauseSecInput = qs('#pauseSec');
+  const fontSizeRange = qs('#fontSize');
+  const autoScrollCk = qs('#autoScroll');
+  const beepCk = qs('#beep');
+
+  const btnStart = qs('#btnStart');
+  const btnPause = qs('#btnPause');
+  const btnResume = qs('#btnResume');
+  const btnStop = qs('#btnStop');
+  const btnPrev = qs('#btnPrev');
+  const btnNext = qs('#btnNext');
+
+  const btnSample = qs('#btnSample');
+  const btnClear = qs('#btnClear');
+  const btnGoRead = qs('#btnGoRead');
+
+  const btnDump = qs('#btnDump');
+  const btnCopyCode = qs('#btnCopyCode');
+  const sourceBox = qs('#sourceBox');
+
+  // State
+  const state = {
+    sentences: [],
+    idx: 0,
+    speaking: false,
+    paused: false,
+    waiting: false,
+    countdownTimer: null,
+    countdownLeft: 0,
+    currentUtterance: null,
+    voices: [],
+  };
+
+  // ===== Tab logic =====
+  function showPanel(which){
+    const isEdit = which === 'edit';
+    tabEdit.setAttribute('aria-selected', isEdit);
+    tabRead.setAttribute('aria-selected', !isEdit);
+    panelEdit.hidden = !isEdit;
+    panelRead.hidden = isEdit;
+  }
+  tabEdit.addEventListener('click', () => showPanel('edit'));
+  tabRead.addEventListener('click', () => { showPanel('read'); buildSentences();});
+
+  btnGoRead.addEventListener('click', () => { showPanel('read'); buildSentences(); });
+
+  // ===== Text handling =====
+  function splitSentences(raw){
+    if(!raw) return [];
+    // Normalize newlines
+    raw = raw.replace(/\r\n?/g, '\n').trim();
+    const result = [];
+    let buf = '';
+    const isBoundary = (c, i, arr) => {
+      // Treat ellipsis ... as one boundary
+      if(c === '.' && arr[i+1] === '.' && arr[i+2] === '.') return true;
+      return '。！!?？；;….' .includes(c);
+    };
+    const arr = Array.from(raw);
+    for(let i=0;i<arr.length;i++){
+      const ch = arr[i];
+      if(ch === '\n'){
+        if(buf.trim()) { result.push(buf.trim()); }
+        buf = '';
+        continue;
+      }
+      buf += ch;
+      if(isBoundary(ch, i, arr)){
+        // include consecutive trailing quotes/spaces
+        while(i+1 < arr.length && /["'”’\)\]\s]/.test(arr[i+1])){ buf += arr[++i]; }
+        if(buf.trim()) { result.push(buf.trim()); }
+        buf = '';
+      }
+    }
+    if(buf.trim()) result.push(buf.trim());
+    // Filter empties and tiny artifacts
+    return result.map(s => s.replace(/\s+/g,' ').trim()).filter(s => s.length>0);
+  }
+
+  function updateStats(){
+    const chars = inputText.value.length;
+    const lines = splitSentences(inputText.value).length;
+    charCount.textContent = chars;
+    lineCount.textContent = lines;
+  }
+
+  inputText.addEventListener('input', ()=>{
+    updateStats();
+    persist();
+  });
+
+  // ===== Build sentence list in Read panel =====
+  function buildSentences(){
+    state.sentences = splitSentences(inputText.value);
+    sentencesEl.innerHTML = '';
+    state.sentences.forEach((s, i)=>{
+      const div = document.createElement('div');
+      div.className = 'sentence';
+      div.style.fontSize = fontSizeRange.value + 'px';
+      div.dataset.idx = String(i);
+      div.textContent = s;
+      div.title = '点击从第 ' + (i+1) + ' 句开始播放';
+      div.addEventListener('click', ()=>{
+        stopAll();
+        state.idx = i;
+        updateProgress();
+        startSequence();
+      });
+      sentencesEl.appendChild(div);
+    });
+    updateProgress();
+  }
+
+  fontSizeRange.addEventListener('input', ()=>{
+    qsa('.sentence').forEach(el=> el.style.fontSize = fontSizeRange.value + 'px');
+    persist();
+  });
+
+  // ===== Voices =====
+  function loadVoices(){
+    const voices = speechSynthesis.getVoices();
+    if(voices && voices.length){
+      state.voices = voices;
+      voiceSelect.innerHTML = voices.map((v,i)=>{
+        const label = `${v.name}  (${v.lang})${v.default?' · 默认':''}`;
+        return `<option value="${i}">${label}</option>`;
+      }).join('');
+      restoreVoiceSelection();
+    }
+  }
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+
+  refreshBtn.addEventListener('click', loadVoices);
+
+  testVoiceBtn.addEventListener('click', ()=>{
+    const sample = 'This is a voice test. 这是一段音色测试。';
+    say(sample);
+  });
+
+  function selectedVoice(){
+    const idx = parseInt(voiceSelect.value || '0', 10);
+    return state.voices[idx] || null;
+  }
+
+  // ===== Speech helpers =====
+  function say(text, onend){
+    if(!text) return;
+    cancelSpeechOnly();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = selectedVoice();
+    if(v) u.voice = v;
+    u.rate = parseFloat(rateSel.value || '1');
+    u.onend = () => { onend && onend(); };
+    u.onerror = () => { onend && onend(); };
+    state.currentUtterance = u;
+    state.speaking = true;
+    state.paused = false;
+    speechSynthesis.speak(u);
+  }
+
+  function cancelSpeechOnly(){
+    try{ speechSynthesis.cancel(); } catch(e){}
+    state.speaking = false;
+  }
+
+  function stopAll(){
+    // Cancel timers & speech & reset waiting
+    if(state.countdownTimer){ clearInterval(state.countdownTimer); state.countdownTimer=null; }
+    cancelSpeechOnly();
+    state.waiting = false;
+    state.paused = false;
+    countdownEl.classList.remove('live');
+    countdownEl.textContent = '—';
+  }
+
+  function highlight(){
+    qsa('.sentence').forEach((el, i)=>{
+      el.classList.toggle('active', i===state.idx);
+      el.classList.toggle('done', i<state.idx);
+    });
+    if(autoScrollCk.checked){
+      const curr = qs(`.sentence[data-idx="${state.idx}"]`);
+      curr && curr.scrollIntoView({behavior:'smooth', block:'center'});
+    }
+  }
+
+  function updateProgress(){
+    progressEl.textContent = `${Math.min(state.idx, state.sentences.length)} / ${state.sentences.length}`;
+    currentIdxEl.textContent = state.sentences.length ? (state.idx+1) : '—';
+    highlight();
+  }
+
+  // Countdown with optional beep
+  let audioCtx = null;
+  function beep(){
+    if(!beepCk.checked) return;
+    try{
+      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.frequency.value = 1200; // Hz
+      o.type = 'sine';
+      o.connect(g); g.connect(audioCtx.destination);
+      g.gain.value = 0.05;
+      o.start();
+      setTimeout(()=>{ o.stop(); }, 90);
+    }catch(e){}
+  }
+
+  function startPauseThenNext(){
+    state.waiting = true;
+    state.speaking = false;
+    state.countdownLeft = Math.max(0.5, parseFloat(pauseSecInput.value || '2'));
+    countdownEl.classList.add('live');
+    countdownEl.textContent = state.countdownLeft.toFixed(1);
+    beep();
+    if(state.countdownTimer){ clearInterval(state.countdownTimer); }
+    const tick = 100;
+    state.countdownTimer = setInterval(()=>{
+      if(state.paused){ return; }
+      state.countdownLeft = Math.max(0, state.countdownLeft - tick/1000);
+      countdownEl.textContent = state.countdownLeft.toFixed(1);
+      if(Math.abs(state.countdownLeft - Math.round(state.countdownLeft)) < 0.05) beep();
+      if(state.countdownLeft <= 0){
+        clearInterval(state.countdownTimer); state.countdownTimer=null;
+        state.waiting = false;
+        countdownEl.classList.remove('live');
+        countdownEl.textContent = '—';
+        state.idx++;
+        updateProgress();
+        if(state.idx < state.sentences.length){
+          speakCurrent();
+        }
+      }
+    }, tick);
+  }
+
+  function speakCurrent(){
+    updateProgress();
+    const text = state.sentences[state.idx] || '';
+    if(!text){ stopAll(); return; }
+    say(text, ()=>{
+      if(state.paused){ return; }
+      startPauseThenNext();
+    });
+  }
+
+  function startSequence(){
+    if(!state.sentences.length){ buildSentences(); }
+    if(!state.sentences.length){ alert('请先在“输入文本”页粘贴/输入课文内容'); return; }
+    stopAll();
+    speakCurrent();
+  }
+
+  // ===== Transport controls =====
+  btnStart.addEventListener('click', startSequence);
+  btnStop.addEventListener('click', ()=>{ stopAll(); state.idx=0; updateProgress(); });
+  btnPause.addEventListener('click', ()=>{
+    state.paused = true;
+    try{ speechSynthesis.pause(); }catch(e){}
+  });
+  btnResume.addEventListener('click', ()=>{
+    state.paused = false;
+    try{ if(speechSynthesis.paused) speechSynthesis.resume(); }catch(e){}
+  });
+  btnPrev.addEventListener('click', ()=>{
+    stopAll();
+    state.idx = Math.max(0, state.idx-1);
+    speakCurrent();
+  });
+  btnNext.addEventListener('click', ()=>{
+    stopAll();
+    state.idx = Math.min(state.sentences.length-1, state.idx+1);
+    speakCurrent();
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e)=>{
+    if(e.code === 'Space'){ e.preventDefault(); if(state.paused){ btnResume.click(); } else { btnPause.click(); } }
+    if(e.key.toLowerCase()==='j'){ btnPrev.click(); }
+    if(e.key.toLowerCase()==='k'){ btnNext.click(); }
+  });
+
+  // Persist settings
+  function persist(){
+    const data = {
+      text: inputText.value,
+      rate: rateSel.value,
+      pause: pauseSecInput.value,
+      font: fontSizeRange.value,
+      autoScroll: autoScrollCk.checked,
+      beep: beepCk.checked,
+      voiceName: selectedVoice() ? selectedVoice().name : null
+    };
+    localStorage.setItem('ra_settings_v1', JSON.stringify(data));
+  }
+
+  function restoreVoiceSelection(){
+    try{
+      const data = JSON.parse(localStorage.getItem('ra_settings_v1')||'{}');
+      if(data.voiceName && state.voices.length){
+        const idx = state.voices.findIndex(v=> v.name===data.voiceName);
+        if(idx>=0){ voiceSelect.value = String(idx); }
+      }
+    }catch(e){}
+  }
+
+  function restore(){
+    try{
+      const data = JSON.parse(localStorage.getItem('ra_settings_v1')||'{}');
+      if(data.text){ inputText.value = data.text; }
+      if(data.rate){ rateSel.value = data.rate; }
+      if(data.pause){ pauseSecInput.value = data.pause; }
+      if(data.font){ fontSizeRange.value = data.font; }
+      if(typeof data.autoScroll==='boolean'){ autoScrollCk.checked = data.autoScroll; }
+      if(typeof data.beep==='boolean'){ beepCk.checked = data.beep; }
+      updateStats();
+    }catch(e){}
+  }
+  restore();
+
+  rateSel.addEventListener('change', persist);
+  pauseSecInput.addEventListener('change', persist);
+  autoScrollCk.addEventListener('change', persist);
+  beepCk.addEventListener('change', persist);
+  voiceSelect.addEventListener('change', persist);
+
+  // Sample text
+  const sample = `Good morning, everyone. Today we will practice shadow reading. 请同学们注意语音语调与停连。\n\nShadow reading trains your ear, your mouth, and your memory. 它可以让你的语音更自然，更地道。\n\nWhen you hear me read a sentence, wait for the beep, then repeat after me. 当你听到提示音后，再开始跟读。`;
+
+  btnSample.addEventListener('click', ()=>{
+    inputText.value = sample;
+    updateStats();
+    persist();
+    buildSentences();
+  });
+  btnClear.addEventListener('click', ()=>{ inputText.value=''; updateStats(); persist(); sentencesEl.innerHTML=''; updateProgress(); });
+
+  // Dump source
+  btnDump.addEventListener('click', ()=>{
+    try{
+      const full = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      sourceBox.value = full;
+      sourceBox.focus();
+      sourceBox.select();
+    }catch(e){ alert('生成失败：' + e.message); }
+  });
+  btnCopyCode.addEventListener('click', ()=>{
+    if(!sourceBox.value){ btnDump.click(); }
+    navigator.clipboard.writeText(sourceBox.value).then(()=>{
+      btnCopyCode.textContent = '已复制';
+      setTimeout(()=> btnCopyCode.textContent = '复制代码', 1200);
+    }).catch(()=>{
+      sourceBox.select(); document.execCommand('copy');
+    });
+  });
+
+  // Initial build
+  buildSentences();
+})();
+</script>
+</body>
+</html>
